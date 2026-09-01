@@ -1,0 +1,14 @@
+fastapi:
+  image: ledger-lens-api
+  tag: latest
+  port: 8000
+  replicas: 1
+
+postgres:
+  image: postgres
+  tag: "16"
+  port: 5432
+  storage: 1Gi
+  user: ledger
+  password: changeme
+  database: ledgerlens
