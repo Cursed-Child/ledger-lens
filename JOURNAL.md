@@ -1,6 +1,6 @@
-# Journal — ledger-lens
+# Journal - ledger-lens
 
-## Week 1, Day 1 — 2026-08-30
+## Week 1, Day 1 - 2026-08-30
 
 **What I built:** Project scaffold, repo structure, toolchain verified (Docker, kubectl, minikube, Helm). Set up a `post-commit` git hook to remind me to update this journal on every commit.
 
@@ -12,7 +12,7 @@ moved standalone VM/KVM fundamentals practice to Month 3 instead.
 
 **Next:** Build FastAPI app skeleton, Dockerfile, and initial Helm chart.
 
-## Week 1, Day 3 — 2026-09-01
+## Week 1, Day 3 - 2026-09-01
 
 **What I built:** Dockerized the FastAPI skeleton. Built and ran the image, confirmed `/health` responds
 identically inside a container as it did running locally via uvicorn — isolating containerization as a
