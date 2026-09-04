@@ -108,3 +108,22 @@ larger blast radius than a restricted user account.
 NetworkPolicy restricting Postgres to only accept FastAPI traffic, deliberate probe timing tuning, RBAC and Pod Security Standards) to the future rather than doing them all now. 
 
 **Next:** Want to have some fun and will develop the actual app.
+
+**What I built:** The latest version of Hello-World are task trackers. I am making one with full create/read/update/delete endpoints. Had to add `models.py` (SQLAlchemy model), `schemas.py` (Pydantic request/response models), and rebuilt `main.py` around FastAPI's dependency injection pattern (`Depends(get_db)`) so each request gets its own DB session that's properly closed even on error.
+
+**Debugging story, recurring pattern:** Hit `ModuleNotFoundError: No module named 'models'` on deploy,
+the same root cause as the earlier `database.py` incident, a new file existed locally but the image
+was built before it was saved, or a stale image was redeployed without rebuilding. This is now a
+recognized failure pattern for me, not a one-off. Adopted a habit going forward: run
+`docker run --rm ledger-lens-api:latest ls /app` after every build to confirm the expected files
+actually made it into the image, before deploying to the cluster, catching a missing-file bug before
+it manifests as a CrashLoopBackOff.
+
+**Design choices:** Used `Base.metadata.create_all(bind=engine)` to auto-create the `tasks` table on
+startup. Deliberately noting this is a shortcut acceptable for a learning project, not production
+practice, real schema changes belong in a migration tool, so future changes to the schema
+are tracked and reversible rather than silently applied.
+
+**Milestone:** A deployed CRUD app on the full infrastructure stack is now completed/closed. Containerized FastAPI and Postgres, deployed via Helm to Kubernetes, connected through a headless service, credentials via Secret, non-root container, and a working CRUD API verified end to end through curl.
+
+**Next:** Will move onto another simple app. For today, its time to go to bed.
