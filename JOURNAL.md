@@ -87,4 +87,24 @@ is missing, converting a silent wrong-config failure into something that cannot 
 
 **Known remaining gap:** I know the password still lies in plaintext in `values.yaml`, which is committed to git. In a real production secret handling would pull this from a cloud secrets manager (AWS Secrets Manager, Vault) or use a tool like Sealed Secrets/External Secrets Operator so nothing sensitive is ever committed at all, not even inside a Secret manifest's source values. I will get to this later when I focus on cloud security as a topic. 
 
-**Next:** I want to continue hardening infrastructure further and then step up on an actual app.
+**Next:** I continued to hardening infrastructure further and then step up on an actual app.
+
+**What I built:** I hardened the FastAPI Dockerfile to run as a non-root user (`appuser`) instead of the
+default root. Added `RUN useradd --create-home --shell /bin/bash appuser` and `USER appuser`, ordered
+after `pip install` (which needs root/write access to system directories) but before `CMD` (so the
+actual running process drops to the restricted user).
+
+**Verification approach:** Didn't rely solely on `kubectl exec ... whoami`, since that spawns a new
+process using the container's default user setting, a related but not identical check to confirming
+the actual HTTP-serving process runs as non-root. Re-ran `/db-check` afterward to confirm
+the permission change didn't break Postgres connectivity, since non-root switches can sometimes break
+things that quietly relied on root access.
+
+**Why this matters:** if a dependency vulnerability or bug ever allowed code execution inside the
+container, running as root gives an attacker root privileges inside that container, a meaningfully
+larger blast radius than a restricted user account.
+
+**Roadmap update:** I deferred remaining standard infra hardening items (like resource requests/limits,
+NetworkPolicy restricting Postgres to only accept FastAPI traffic, deliberate probe timing tuning, RBAC and Pod Security Standards) to the future rather than doing them all now. 
+
+**Next:** Want to have some fun and will develop the actual app.
