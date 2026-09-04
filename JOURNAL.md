@@ -35,3 +35,38 @@ Used exec-form `CMD` (`["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8
 **Diagram:** Generated a context diagram showing how `values.yaml` feeds all four templates (fastapi-deployment, fastapi-service, postgres-statefulset, postgres-service), and how the two Services route to their respective pods. Useful reference for anyone (including future me) trying to understand the chart's structure at a glance.
 
 **Next:** Build the FastAPI image inside minikube's Docker daemon (or push to a registry), then `helm install` the chart and verify both the API and Postgres come up healthy.
+
+
+
+## Week 1, Day 4 - 2026-09-03
+
+**What I built:** Resumed from the Day 3 stopping point. Pointed the shell at minikube's internal Docker daemon (`eval $(minikube docker-env)`) and rebuilt the FastAPI image there, since minikube runs its own Docker daemon separate from the host, an image built normally on the host isn't visible to the cluster. Added `imagePullPolicy: Never` to the Deployment so Kubernetes doesn't attempt to pull the image from an external registry it was never pushed to.
+
+**Fork in the road, minikube vs kind:** Someone asked "why minikube was chosen over kind, given kind's `kind load docker-image` workflow is more Docker-native (build normally on host, load directly into the cluster, no daemon-switching required)". Good question and my reason was that the minikube choice earlier was mostly convention and momentum, not a deliberate tradeoff analysis. I had thought about switching but being mid-Week-1 with a working chart and toolchain already in existence around minikube, thought otherwise. That being said, I have flagged kind as worth trying deliberately later (maybe later as I work with Gateway API testing) specifically to compare the image-loading ergonomics and multi-node testing capability firsthand - something I believe will be a good conversation.
+
+**Next:** Next I have to verify both the FastAPI and Postgres pods come up healthy via `helm install` and `kubectl get pods`, then test connectivity between them.
+
+
+**What I built:** Verified full stack is running end to end. `helm install` deployed both FastAPI and Postgres. I confirmed via `kubectl port-forward` that `/health` responds correctly through the Kubernetes Service, not just a direct container port, proving the Deployment to Service to probe chain works.
+
+**Debugging story:** I hit `ImagePullBackOff` first (since image was built on host, and not visible to minikube's internal Docker daemon). I fixed by rebuilding inside `eval $(minikube docker-env)` and setting `imagePullPolicy: Never`. Then hit a second, less obvious issue: `kubectl port-forward` failed with service not found, even though `helm lint` had passed cleanly earlier. Ran root-cause with `helm get manifest ledger-lens`, comparing the actual rendered output against what was expected, which revealed the FastAPI Service was missing entirely from the manifest. I traced it to `templates/service.yaml` and realized I never created it in the first place. Was not sure if its a file-creation step that silently failed earlier without an error, and since `helm lint` doesn't catch a missing file (only syntax errors in files that exist), I obviously missed it. I recreated the file, ran `helm upgrade` (not `install`, since the release already existed), confirmed the Service appeared and connectivity worked.
+
+**Lesson:** `helm lint` validates syntax of what's there, it does not confirm all expected resources actually exist. When a resource seems to be missing at runtime, `helm get manifest <release>` is the fastest way to see exactly what Kubernetes actually received, rather than assuming the source templates are correct.
+
+**Next:** Wire FastAPI to Postgres (actual DB connection, not just co-located pods), then build the first real CRUD endpoint.
+
+
+**What I built:** I wired FastAPI to Postgres via SQLAlchemy, using the headless service DNS name
+(`ledger-lens-postgres`) as the connection host. I then added a `/db-check` endpoint that runs a real query
+through the connection to prove it works end to end, not just that both pods exist side by side.
+
+**Debugging story:** My first deploy attempt hit `CrashLoopBackOff`. Root cause was the Dockerfile only
+had `COPY main.py .`, so the new `database.py` module never made it into the image, the import failed
+at container startup. Of course, I forgot to add the file and fixed by switching to `COPY . .` so the whole app directory copies in automatically as the app grows, paired with a new `.dockerignore` (same syntax as `.gitignore`) to
+keep `venv/` and `__pycache__/` out of the build context. This is a pattern I have always followed but not sure why it was missed this time .. maybe I am very tired ? 
+
+**Fork in the road:** I just want to make the database connection work and for a quick fix used `os.getenv` with a hardcoded fallback for the database connection string rather than hardcoding it directly, so the same code works across local dev and different cluster environments without a code change, just a config change. The fallback is obviously HORRIFIC for security because currently still contains the Postgres password in plaintext, which is a known gap. I am going to move it to a proper Kubernetes Secret rather than leaving it in `values.yaml` and the code's default string.
+
+**Next:** Move the Postgres password out of `values.yaml` into a Kubernetes Secret, wire it into both
+the Postgres StatefulSet and the FastAPI Deployment via environment variables so neither has the
+credential hardcoded in source.

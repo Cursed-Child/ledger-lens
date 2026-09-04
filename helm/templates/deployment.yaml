@@ -15,6 +15,7 @@ spec:
       containers:
         - name: fastapi
           image: "{{ .Values.fastapi.image }}:{{ .Values.fastapi.tag }}"
+          imagePullPolicy: Never
           ports:
             - containerPort: {{ .Values.fastapi.port }}
           livenessProbe:
