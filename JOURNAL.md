@@ -70,3 +70,21 @@ keep `venv/` and `__pycache__/` out of the build context. This is a pattern I ha
 **Next:** Move the Postgres password out of `values.yaml` into a Kubernetes Secret, wire it into both
 the Postgres StatefulSet and the FastAPI Deployment via environment variables so neither has the
 credential hardcoded in source.
+
+**What I built:** I moved the Postgres password out of `values.yaml`/inline env values into a proper
+Kubernetes Secret. Both the Postgres StatefulSet and the FastAPI Deployment now source credentials via
+`secretKeyRef` rather than plaintext. The `DATABASE_URL` is being assembled inside the Deployment spec using
+Kubernetes' `$(VAR)` interpolation between env vars sourced from the same Secret, so the full connection
+string is never written as a literal string anywhere in the manifests.
+
+**Fork in the road:** Switched `database.py` from `os.getenv("DATABASE_URL", <hardcoded fallback>)` to
+`os.environ["DATABASE_URL"]`. Though a small change, the difference matters more than it looks: `getenv` with a default fails silently, if the env var were ever missing due to a misconfigured Secret or a YAML typo, the app would
+keep running normally, using the wrong hardcoded credential, `/health` would still report ok, and
+nothing would visibly signal the misconfiguration. However `os.environ[...]` raises immediately if the variable
+is missing, converting a silent wrong-config failure into something that cannot be ignored.
+
+**Verification:** Then I confirmed the Secret actually landed in the container via `kubectl exec ... -- printenv DATABASE_URL` before trusting `/db-check`, rather than only inferring success from the endpoint working, since a masked failure (wrong DB, silently connected somewhere unintended) wouldn't necessarily be obvious from the app behaving normally.
+
+**Known remaining gap:** I know the password still lies in plaintext in `values.yaml`, which is committed to git. In a real production secret handling would pull this from a cloud secrets manager (AWS Secrets Manager, Vault) or use a tool like Sealed Secrets/External Secrets Operator so nothing sensitive is ever committed at all, not even inside a Secret manifest's source values. I will get to this later when I focus on cloud security as a topic. 
+
+**Next:** I want to continue hardening infrastructure further and then step up on an actual app.
